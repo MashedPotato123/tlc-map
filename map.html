@@ -2,449 +2,536 @@
 <html lang="en">
 
 <head>
-  <meta charset="utf-8" />
-  <title>Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1" />
-  <!-- Link Swiper's CSS -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="clinics.js" ></script>
+    <meta charset="utf-8" />
+    <title>Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1" />
+    <!-- Link Swiper's CSS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" xintegrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+	<script src="clinics.js" ></script>
 
 
-<script>
-	
-	$(document).ready(function(){
-		filter_clinics();
-	});
+
+    <script>
+        // jQuery document ready function to filter clinics on load
+        $(document).ready(function() {
+            filter_clinics();
+        });
+
+        var map;
+        var markersArray = {}; // Use an object for markers for easy access by clinic_id
+        var infoWindowArray = {}; // Use an object for info windows
+
+        /**
+         * Initializes the Google Map.
+         * The callback for the Google Maps API script.
+         */
+        function initMap() {
+            // Default center for the map (Davao City, Philippines, based on current location)
+            const defaultLatLng = { lat: 7.0519, lng: 125.5721 };
+            map = new google.maps.Map(document.getElementById("google_map"), {
+                zoom: 12, // Adjusted zoom for better initial view
+                center: defaultLatLng,
+                mapTypeControl: false, // Hide map type controls
+                streetViewControl: false, // Hide street view control
+                fullscreenControl: false // Hide fullscreen control
+            });
+
+            // No initial marker needed, as filter_clinics will add them
+            // new google.maps.Marker({
+            //     position: defaultLatLng,
+            //     map,
+            //     title: "Davao City",
+            // });
+
+            // Set the initial country selection to 'philippines' and filter clinics
+            $('#clinic_country').val('philippines');
+            filter_clinics();
+        }
+
+        window.initMap = initMap; // Expose initMap to the global scope for Google Maps API callback
+
+        /**
+         * Filters and displays clinics based on selected country and type.
+         */
+        function filter_clinics() {
+            var output_html = '';
+
+            // Get selected country from the dropdown
+            var clinic_country = $('#clinic_country').val();
+            // clinic_type is always 'all' as per original logic
+            var clinic_type = 'all';
+
+            clear_markers(); // Clear existing markers from the map
+            clear_info_windows(); // Close any open info windows
+
+            var array_first_run_flag = 0; // Flag to center map on the first clinic
+
+            // Check if data exists for the selected country
+            if (clinics_array[clinic_country]) {
+                for (var key in clinics_array[clinic_country]) {
+                    var clinic_data = clinics_array[clinic_country][key];
+
+                    var clinic_id = clinic_data['ID'];
+                    var clinic_name = clinic_data['na'];
+                    var clinic_address = clinic_data['st'];
+                    var clinic_contact = clinic_data['te'];
+                    var clinic_website = clinic_data['we'];
+
+                    if (clinic_website == undefined) {
+                        clinic_website = '--';
+                    }
+
+                    var clinic_lat = parseFloat(clinic_data['lat']);
+                    var clinic_lng = parseFloat(clinic_data['lng']);
+
+                    var clinic_is_pr = parseFloat(clinic_data['pr']);
+
+                    // Determine clinic image based on 'pr' property
+                    var clinic_image = '';
+                    if (clinic_is_pr == 1) {
+                        // Placeholder for TLC logo image
+                        clinic_image = '<img src="https://placehold.co/50x50/2A52BE/ffffff?text=LOGO" class="clinic_type_image" alt="TLC Logo" />';
+                    } else {
+                        // Placeholder for generic clinic image
+                        clinic_image = '<img src="https://placehold.co/50x50/2A52BE/ffffff?text=LOGO" class="clinic_type_image" alt="Clinic Logo" />';
+                    }
+
+                    // Create a new Google Maps marker for the clinic
+                    var clinic_marker = new google.maps.Marker({
+                        position: { lat: clinic_lat, lng: clinic_lng },
+                        map: map,
+                        title: clinic_id, // Store clinic_id in marker title for easy lookup
+                        // Placeholder for marker icon
+                        icon: 'https://placehold.co/24x24/808080/ffffff?text=M' // Grey marker icon
+                    });
+
+                    addClickHandler(clinic_marker); // Add click event listener to the marker
+
+                    // Create an info window for the clinic
+                    var infowindow = new google.maps.InfoWindow({
+                        content: '<div class="popup_container">' +
+                            '<span class="popup_title">' + clinic_name + '</span><br />' +
+                            '<span class="popup_details">' + clinic_address + '<br />Tel.: ' + clinic_contact + '<br />Website: ' + clinic_website + '</span>' +
+                            '<a href="https://www.google.com/maps/dir/?api=1&destination=' + clinic_lat + ',' + clinic_lng + '" class="popup_link" target="_blank">' +
+                            '<svg xmlns="http://www.w3.org/2000/svg" class="map_icon" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="m11.54 22.351.07.04.028.016a.76.76 0 0 0 .723 0l.028-.015.071-.041a16.975 16.975 0 0 0 1.144-.742 19.58 19.58 0 0 0 2.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 0 0-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 0 0 2.682 2.282 16.975 16.975 0 0 0 1.145.742ZM12 13.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd" /></svg>' +
+                            'VIEW ON MAP' +
+                            '</a></div>',
+                        ariaLabel: clinic_name,
+                    });
+
+                    // Store marker and info window in arrays for later access
+                    markersArray[clinic_id] = clinic_marker;
+                    infoWindowArray[clinic_id] = infowindow;
+
+                    // Build the HTML for the clinic list item
+                    output_html += "<div class='clinic_item' id='clinic_item_" + clinic_id + "' onmouseover='move_to_clinic_marker(\"" + clinic_id + "\")'>" +
+                        "<div class='left_clinic_box'>" + clinic_image + "</div>" +
+                        "<div class='right_clinic_box'>" +
+                        "<span class='right_clinic_box_name'>" + clinic_name + "</span><br />" +
+                        "<span class='right_clinic_box_details'>" + clinic_address + "</span>" +
+                        "</div>" +
+                        "<div class='clear'></div>" +
+                        "</div>";
+
+                    // For the first clinic in the list, center the map and open its info window
+                    if (array_first_run_flag == 0) {
+                        array_first_run_flag = 1;
+                        move_to_clinic_marker(clinic_id);
+                    }
+                }
+            } else {
+                output_html = "<p style='padding: 20px;'>No clinics found for this country.</p>";
+            }
+
+            // Update the clinic list in the HTML
+            $('#clinic_list').html(output_html);
+        }
+
+        /**
+         * Adds a click handler to a Google Maps marker.
+         * @param {google.maps.Marker} theMarker The marker to add the click handler to.
+         */
+        function addClickHandler(theMarker) {
+            google.maps.event.addListener(theMarker, 'click', function() {
+                move_to_clinic_marker(theMarker.title); // Use marker title (clinic_id) to identify
+            });
+        }
+
+        /**
+         * Clears all markers from the map.
+         */
+        function clear_markers() {
+            for (var key in markersArray) {
+                if (markersArray[key]) {
+                    markersArray[key].setMap(null);
+                }
+            }
+            markersArray = {}; // Reset the markers array
+        }
+
+        /**
+         * Closes all open info windows.
+         */
+        function clear_info_windows() {
+            for (var key in infoWindowArray) {
+                if (infoWindowArray[key]) {
+                    infoWindowArray[key].close();
+                }
+            }
+        }
+
+        /**
+         * Moves the map to the specified clinic's marker and opens its info window.
+         * Highlights the corresponding clinic item in the list.
+         * @param {string} clinic_id The ID of the clinic to move to.
+         */
+        function move_to_clinic_marker(clinic_id) {
+            if (markersArray[clinic_id]) {
+                map.setCenter(markersArray[clinic_id].getPosition());
+                // markersArray[clinic_id].setAnimation(google.maps.Animation.BOUNCE); // Optional: add bounce animation
+
+                clear_info_windows(); // Close all other info windows
+
+                // Open the info window for the selected clinic
+                infoWindowArray[clinic_id].open({
+                    anchor: markersArray[clinic_id],
+                    map: map,
+                });
+
+                // Remove highlight from all clinic items
+                $('.clinic_item').css('background', '#fff');
+
+                // Add highlight to the selected clinic item
+                $('#clinic_item_' + clinic_id).css('background', '#eee');
+
+                // Scroll to the selected clinic item
+                var container = $('#clinic_list');
+                var scrollTo = $('#clinic_item_' + clinic_id);
+                if (scrollTo.length) {
+                    container.scrollTop(
+                        scrollTo.offset().top - container.offset().top + container.scrollTop()
+                    );
+                }
+            }
+        }
+    </script>
 
 
-	 
-	 function filter_clinics()
-	 {
-		var output_html = '';
-	 
-		clinic_country = $('#clinic_country').val();
-		clinic_type = 'all'; // Always show all clinics
-		
-		clear_markers();
-		
-		var array_first_run_flag = 0;
-		
-		for (var key in clinics_array[clinic_country])
-		{
-			
-			var clinic_id = clinics_array[clinic_country][key]['ID'];
-			 var clinic_name = clinics_array[clinic_country][key]['na'];
-			 var clinic_address = clinics_array[clinic_country][key]['st'];
-			 var clinic_contact = clinics_array[clinic_country][key]['te'];
-			 var clinic_website = clinics_array[clinic_country][key]['we'];
-			 
-			 if(clinic_website == undefined)
-			 {
-				clinic_website = '--';
-			 }
-			 
-			 var clinic_lat = parseFloat(clinics_array[clinic_country][key]['lat']);
-			 var clinic_lng = parseFloat(clinics_array[clinic_country][key]['lng']);
-			 
-			 var clinic_is_pr = parseFloat(clinics_array[clinic_country][key]['pr']);
-			 
-			 if(clinic_is_pr == 1)
-			 {
-				clinic_image = '<img src="images/tlc-logo-1.png" class="clinic_type_image" />';
-			 }
-			 else
-			 {
-				clinic_image = '<img src="images/tlc-logo-1.png" class="clinic_type_image" />';
-			 }
-			 
-			 
-			 
-			 clinic_marker = new google.maps.Marker({
-				position: { lat: clinic_lat, lng: clinic_lng },
-				map,
-				title: clinic_id,
-				icon: 'images/marker_grey.png'
-			  });
-			 
-			 
-			 addClickHandler(clinic_marker);
-			
-			 
-			 infowindow = new google.maps.InfoWindow({
-				content: '<div class="popup_container"><div tabindex="0" style="display: none;"></div><span class="popup_title">' + clinic_name + '</span><br /><span class="popup_details">' + clinic_address + '<br />Tel.: ' + clinic_contact + '<br />Website: ' + clinic_website + '</span><a href="https://www.google.com/maps/dir/' + clinic_lat + ',' + clinic_lng + '" class="popup_link" target="_blank"> <svg xmlns="http://www.w3.org/2000/svg" class="map_icon" viewBox="0 0 24 24" fill="currentColor" class="size-6"><path fill-rule="evenodd" d="m11.54 22.351.07.04.028.016a.76.76 0 0 0 .723 0l.028-.015.071-.041a16.975 16.975 0 0 0 1.144-.742 19.58 19.58 0 0 0 2.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 0 0-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 0 0 2.682 2.282 16.975 16.975 0 0 0 1.145.742ZM12 13.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd" /></svg>VIEW ON MAP</a></div>',
-				ariaLabel: "Test2",
-			  });
-			
-			// console.log(clinics_array[clinic_country][key]['pr']);
-			markersArray[clinic_id] = clinic_marker;
-			infoWindowArray[clinic_id] = infowindow;
+    <style>
+        /* Basic body and html styles */
+        html,
+        body {
+            position: relative;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', Helvetica Neue, Helvetica, Arial, sans-serif; /* Using Inter font */
+            font-size: 14px;
+            color: #000;
+            background: #f8f8f8; /* Light grey background */
+        }
 
-			output_html = output_html + ("<div class='clinic_item' id='clinic_item_" + clinic_id + "' onmouseover='move_to_clinic_marker(" + clinic_id + ")'>  <div class='left_clinic_box'>" + clinic_image + "</div>  <div class='right_clinic_box'>	<span class='right_clinic_box_name'>" + clinic_name + "</span><br /><span class='right_clinic_box_details'>" + clinic_address + "</span>		</div>  <div class='clear'></div>    </div>");
+        /* Main map container styling */
+        .map_container {
+            width: 1180px;
+            margin: 40px auto; /* Added top/bottom margin */
+            display: flex; /* Use flexbox for layout */
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            gap: 20px; /* Gap between map and list */
+            justify-content: center; /* Center content horizontally */
+        }
 
-			if(array_first_run_flag == 0)
-			{
-				array_first_run_flag = 1;
-				move_to_clinic_marker(clinic_id);
-			}
-		 }
-		
-		$('#clinic_list').html(output_html);
-	 }
-	 
-	 function addClickHandler(theMarker) {
-	google.maps.event.addListener(theMarker, 'click', function() {
-	move_to_clinic_marker(theMarker.title);
-	  });
-	}
-	 
-	 function clear_markers() {
-	  for (var key in markersArray) {
-		markersArray[key].setMap(null);
-	  }
-	}
-	
-	 function clear_info_windows() {
-	  for (var key in infoWindowArray) {
-		infoWindowArray[key].close();
-	  }
-	}
-	 
-	function move_to_clinic_marker(clinic_id)
-	{
-		map.setCenter(markersArray[clinic_id].getPosition());
-		// markersArray[clinic_id].setAnimation(google.maps.Animation.BOUNCE);
-		clear_info_windows();
-		
-		infoWindowArray[clinic_id].open({
-      anchor: markersArray[clinic_id],
-      map,
-    });
-		
-		$('.clinic_item').each(function(){
-			$(this).css('background', '#fff');
-		});
-		
-		$('#clinic_item_' + clinic_id).css('background', '#eee');
-	}	
-	
-</script>
+        /* Map and list column styling */
+        .map_left,
+        .map_right {
+            flex: 1; /* Allow columns to grow and shrink */
+            min-width: 300px; /* Minimum width before wrapping */
+            max-width: 48%; /* Max width for two columns */
+            border-radius: 12px; /* Rounded corners for consistency */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+            background-color: #fff;
+            padding: 20px;
+        }
 
+        /* Google Map specific styling */
+        #google_map {
+            height: 500px;
+            width: 100%; /* Ensure map takes full width of its container */
+            border-radius: 8px; /* Slightly less rounded than container */
+            overflow: hidden; /* Hide overflow if any */
+        }
 
-  <style>
-    html,
-    body {
-      position: relative;
-      height: 100%;
-    }
+        /* Clearfix utility */
+        .clear {
+            clear: both;
+        }
 
-    body {
-      background: #fff;
-      font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
-      font-size: 14px;
-      color: #000;
-      margin: 0;
-      padding: 0;
-    }
-	
-	#google_map
-	{
-		height: 500px;
-		border-radius: 64px;
-	}
-	
-	.map_container
-	{
-		width: 1180px;
-		margin: 0 auto;
-	}
-	
-	.map_left
-	{
-		float: left;
-		width: 45%;
-	}
-	
-	.map_right
-	{
-		float: right;
-		width: 45%;
-		height: 500px;
-	}
-	
-	.clear
-	{
-		clear: both;
-	}
-	
-	.clinic_item
-	{
-		padding-top: 20px;
-		padding-bottom: 20px;
-		border-top: 2px solid #2A52BE;
-	}
-	
-	.clinic_item:hover
-	{
-		background: #eee;
-	}
-	
-	.left_clinic_box
-	{
-		float: left;
-		width: 20%;
-	}
-	
-	.right_clinic_box
-	{
-		float: right;
-		width: 80%;
-	}
+        /* Clinic list item styling */
+        .clinic_item {
+            padding: 15px 0; /* Adjusted padding */
+            border-top: 1px solid #e0e0e0; /* Lighter border */
+            cursor: pointer;
+            transition: background-color 0.2s ease; /* Smooth transition for hover */
+            display: flex; /* Use flexbox for item layout */
+            align-items: center; /* Vertically align items */
+            gap: 15px; /* Gap between image and text */
+        }
 
-	.right_clinic_box_name
-	{
-		font-weight: bold;
-	}
-	
-	.right_clinic_box_details
-	{
-		display: block;
-		margin-top: 10px;
-	}
+        .clinic_item:first-child {
+            border-top: none; /* No top border for the first item */
+        }
 
-	#clinic_list
-	{
-		max-width: 400px;
-		height: 400px;
-		overflow-y: scroll;
-	}
-	
-	.clinic_type_image
-	{
-		width: 50px;
-	}
+        .clinic_item:hover {
+            background: #f0f0f0; /* Lighter hover background */
+            border-radius: 8px; /* Rounded corners on hover */
+        }
 
-	.popup_container
-	{
-		max-width: 250px;
-		padding-left: 10px;
-		padding-right: 10px;
-		overflow: hidden;
-	}
+        /* Left box for clinic image */
+        .left_clinic_box {
+            flex-shrink: 0; /* Prevent shrinking */
+            width: 60px; /* Fixed width for image container */
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #e6f0ff; /* Light blue background for logo */
+            border-radius: 50%; /* Circular image container */
+            overflow: hidden;
+        }
 
-	.popup_title
-	{
-		display: block;
-		font-weight: bold;
-		font-size: 14px;
-		margin-bottom: 5px;
-	}
+        .clinic_type_image {
+            width: 40px; /* Smaller image size */
+            height: 40px;
+            object-fit: contain; /* Ensure image fits */
+        }
 
-	.popup_link
-	{
-		text-align: center;
-		width: calc(100% - 40px);
-		display: block !important;
-		padding: 20px;
-		color: 	#2A52BE;
-		text-decoration: none;
-	}
-	
-	.map_icon
-	{
-		height: 18px;
-		width: 18px;
-		vertical-align: middle;
-		margin-right: 5px;
-	}
+        /* Right box for clinic details */
+        .right_clinic_box {
+            flex-grow: 1; /* Allow text to take remaining space */
+        }
 
-	.map_radio
-	{
-		border: 2px solid #1861ff;
-		width: 16px;
-		height: 16px;
-	}
-	
-	/* The map_radio_container */
-	.map_radio_container {
-	  display: inline-block;
-	  position: relative;
-	  padding-left: 35px;
-	  margin-bottom: 12px;
-	  cursor: pointer;
-	  font-size: 12px;
-	  font-weight: bold;
-	  -webkit-user-select: none;
-	  -moz-user-select: none;
-	  -ms-user-select: none;
-	  user-select: none;
-	}
+        .right_clinic_box_name {
+            font-weight: 700; /* Bolder font */
+            font-size: 16px; /* Slightly larger font */
+            color: #2A52BE; /* Brand color for name */
+        }
 
-	/* Hide the browser's default radio button */
-	.map_radio_container input {
-	  position: absolute;
-	  opacity: 0;
-	  cursor: pointer;clinic_list
-	}
+        .right_clinic_box_details {
+            display: block;
+            margin-top: 5px;
+            font-size: 13px;
+            color: #555;
+        }
 
-	/* Create a custom radio button */
-	.checkmark {
-	  position: absolute;
-	  top: -5px;
-	  left: 0;
-	  height: 25px;
-	  width: 25px;
-	  background-color: #eee;
-	  border-radius: 50%;
-	  vertical-align: middle;
-	}
+        /* Clinic list scrollable area */
+        #clinic_list {
+            height: 400px;
+            overflow-y: auto; /* Enable vertical scrolling */
+            padding-right: 10px; /* Space for scrollbar */
+            border-radius: 8px;
+            background-color: #fff;
+        }
 
-	/* On mouse-over, add a grey background color */
-	.map_radio_container:hover input ~ .checkmark {
-	  background-color: #ccc;
-	}
+        /* Custom scrollbar styling (Webkit browsers) */
+        #clinic_list::-webkit-scrollbar {
+            width: 8px;
+        }
 
-	/* When the radio button is checked, add a blue background */
-	.map_radio_container input:checked ~ .checkmark {
-	  background-color: #276bff;
-	}
+        #clinic_list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
 
-	/* Create the indicator (the dot/circle - hidden when not checked) */
-	.checkmark:after {
-	  content: "";
-	  position: absolute;
-	  display: none;
-	}
+        #clinic_list::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
 
-	/* Show the indicator (dot/circle) when checked */
-	.map_radio_container input:checked ~ .checkmark:after {
-	  display: block;
-	}
+        #clinic_list::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
 
-	/* Style the indicator (dot/circle) */
-	.map_radio_container .checkmark:after {
-		top: 9px;
-		left: 9px;
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		background: #3dcef2;
-	}
-	
-	
+        /* Popup (InfoWindow) styling */
+        .popup_container {
+            max-width: 250px;
+            padding: 10px; /* Adjusted padding */
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            text-align: center; /* Center content in popup */
+        }
 
-		@media screen and (max-width: 780px) {
-			
-			.map_container
-			{
-				width: 100%;
-			}
-			
-			.map_left, .map_right
-			{
-				float: none;
-				width: 90%;
-				margin: 0 auto;
-			}
-		
-			#google_map
-			{
-				width: 100%;
-				height: 400px !important;
-			}
-			
-			.map_left
-			{
-				margin-bottom: 40px;
-			}
-			
-			#clinic_list
-			{
-				width: 100%;
-				max-width: 100%;
-			}
-			
-			#clinic_country
-			{
-				max-width: calc(100% - 20px) !important;
-			}
-		
-		}
-		
+        .popup_title {
+            display: block;
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #2A52BE;
+        }
 
-  </style>
+        .popup_details {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .popup_link {
+            display: inline-flex !important; /* Use inline-flex for icon and text alignment */
+            align-items: center;
+            justify-content: center;
+            padding: 10px 15px;
+            color: #fff; /* White text */
+            background-color: #2A52BE; /* Blue button */
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 13px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+
+        .popup_link:hover {
+            background-color: #1a3a8a; /* Darker blue on hover */
+            transform: translateY(-2px); /* Slight lift effect */
+        }
+
+        .map_icon {
+            height: 18px;
+            width: 18px;
+            vertical-align: middle;
+            margin-right: 8px; /* Space between icon and text */
+            fill: currentColor; /* Ensure SVG icon inherits text color */
+        }
+
+        /* Country dropdown styling */
+        #clinic_country {
+            border: 2px solid #2A52BE; /* Blue border */
+            padding: 10px 15px; /* More padding */
+            color: #2A52BE;
+            font-weight: bold;
+            border-radius: 8px; /* Rounded corners */
+            margin-bottom: 20px; /* More bottom margin */
+            width: 100%; /* Full width of its container */
+            max-width: 400px; /* Max width for desktop */
+            box-sizing: border-box; /* Include padding and border in element's total width */
+            background-color: #fff;
+            appearance: none; /* Remove default dropdown arrow */
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232A52BE'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E"); /* Custom arrow */
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 20px;
+            cursor: pointer;
+        }
+
+        /* Responsive Styles */
+        @media screen and (max-width: 1200px) {
+            .map_container {
+                width: 95%; /* Adjust container width for slightly smaller screens */
+                margin: 20px auto;
+            }
+            .map_left,
+            .map_right {
+                max-width: 49%; /* Allow columns to be slightly wider */
+            }
+        }
+
+        @media screen and (max-width: 780px) {
+            .map_container {
+                width: 90%; /* Further adjust container width for mobile */
+                flex-direction: column; /* Stack columns vertically */
+                gap: 30px; /* Increase gap when stacked */
+            }
+
+            .map_left,
+            .map_right {
+                float: none; /* Remove float */
+                width: 100%; /* Take full width */
+                max-width: 100%; /* Ensure full width */
+                margin: 0 auto;
+                box-shadow: none; /* Remove shadow when stacked for cleaner look */
+                border-radius: 0; /* Remove border-radius when stacked */
+                padding: 15px; /* Adjust padding */
+            }
+
+            #google_map {
+                height: 300px !important; /* Shorter map on mobile */
+                border-radius: 8px; /* Re-apply border-radius for map itself */
+            }
+
+            .map_left {
+                margin-bottom: 0; /* No bottom margin when stacked */
+            }
+
+            #clinic_list {
+                width: 100%;
+                max-width: 100%;
+                height: 350px; /* Adjust height for mobile list */
+            }
+
+            #clinic_country {
+                max-width: 100%; /* Full width for dropdown */
+            }
+        }
+
+        @media screen and (max-width: 480px) {
+            .map_container {
+                width: 100%; /* Full width on very small screens */
+                padding: 0 10px; /* Add horizontal padding */
+                box-sizing: border-box;
+            }
+
+            .map_left,
+            .map_right {
+                padding: 10px; /* Reduce padding */
+            }
+
+            .clinic_item {
+                flex-direction: column; /* Stack image and text in clinic item */
+                align-items: flex-start; /* Align text to the start */
+                gap: 5px;
+            }
+
+            .left_clinic_box {
+                margin-bottom: 5px; /* Space below image */
+            }
+
+            .right_clinic_box_name {
+                font-size: 15px;
+            }
+
+            .right_clinic_box_details {
+                font-size: 12px;
+            }
+        }
+    </style>
 </head>
 
-<script>
-
-	$(document).ready(function(){
-	
-		$('.swiper').css('height', $(window).width() / 1.7777);
-		
-		
-		
-	});
-	
-	var map;
-	var markersArray = [];
-	var infoWindowArray = [];
-
-	function initMap() {
-  const myLatLng = { lat: -25.363, lng: 131.044 };
-  map = new google.maps.Map(document.getElementById("google_map"), {
-    zoom: 15,
-    center: myLatLng,
-  });
-
-  new google.maps.Marker({
-    position: myLatLng,
-    map,
-    title: "Hello World!",
-  });
-}
-
-window.initMap = initMap;
-
-</script>
-
 <body>
-	
-	<!-- <img src='images/header_test.jpg' style='width: 100%;' /> -->
-	
-	<div class='map_container'>
-	
-		<div class='map_left'>
-			
-		
-			<div id="google_map"></div>
-		</div>	
+    <div class='map_container'>
+        <div class='map_left'>
+            <div id="google_map"></div>
+        </div>
 
-		<div class='map_right'>
-		
-			<select id='clinic_country' onchange='filter_clinics()' style='border: 2px solid #000; padding: 5px; color: #000; font-weight: bold; border-radius: 64px; margin-bottom: 10px; max-width: 400px; width: calc(100% - 20px);'>
-				<option value='india'>India</option>
-				<option value='indonesia'>Indonesia</option>
-				<option value='malaysia'>Malaysia</option>
-				<option value='philippines'>Philippines</option>
-				<option value='thailand'>Thailand</option>
-				<option value='vietnam'>Vietnam</option>
-			</select>
-			
-			<br />
-			<br />
+        <div class='map_right'>
+            <select id='clinic_country' onchange='filter_clinics()'>
+                <option value='india'>India</option>
+                <option value='indonesia'>Indonesia</option>
+                <option value='malaysia'>Malaysia</option>
+                <option value='philippines'>Philippines</option>
+                <option value='thailand'>Thailand</option>
+                <option value='vietnam'>Vietnam</option>
+            </select>
 
+            <div id='clinic_list'></div>
+        </div>
 
-			<div id='clinic_list'></div>
-			
-		</div>
-		
-		<div class='clear'></div>
-	
-	</div>
-  
-  
-	<!-- <img src='images/footer_test.jpg' style='width: 100%;' /> -->
-  
-	<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA8LS8JSeZavwhyuqEL6JisrMONe0Xd8z4&callback=initMap&v=weekly" defer ></script>
+        <div class='clear'></div>
+    </div>
+
+    <!-- Google Maps API script with your key -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA8LS8JSeZavwhyuqEL6JisrMONe0Xd8z4&callback=initMap&v=weekly" defer></script>
 </body>
 
 </html>
